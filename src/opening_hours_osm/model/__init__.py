@@ -1,35 +1,11 @@
 from typing import Sequence
 from dataclasses import dataclass
-import enum
 
 from opening_hours_osm.model import day, time  # noqa: F401
 from opening_hours_osm.model.day import DaySelector
 from opening_hours_osm.model.time import TimeSelector
 from opening_hours_osm.model.util import ModelBase
-
-
-class RuleKind(enum.Enum):
-    OPEN = enum.auto()
-    CLOSED = enum.auto()
-    UNKNOWN = enum.auto()
-
-    def __str__(self) -> str:
-        return self.name.lower()
-
-
-class RuleOperator(enum.Enum):
-    NORMAL = enum.auto()
-    ADDITIONAL = enum.auto()
-    FALLBACK = enum.auto()
-
-    def _separator(self):
-        match self:
-            case self.NORMAL:
-                return "; "
-            case self.ADDITIONAL:
-                return ", "
-            case self.FALLBACK:
-                return " | "
+from opening_hours_osm.model.enums import RuleKind, RuleOperator
 
 
 @dataclass

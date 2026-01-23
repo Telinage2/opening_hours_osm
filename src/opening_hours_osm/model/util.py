@@ -1,5 +1,9 @@
 from typing import Sequence
 import enum
+import datetime
+from dataclasses import dataclass
+
+from opening_hours_osm.model.enums import RuleKind
 
 
 class ModelBase:
@@ -10,6 +14,14 @@ class ModelBase:
 class Sign(enum.IntEnum):
     PLUS = 1
     MINUS = -1
+
+
+@dataclass
+class DateTimeRange:
+    start: datetime.datetime
+    end: datetime.datetime
+    kind: RuleKind
+    comments: list[str]
 
 
 def fmt_offset(offset: int) -> str:

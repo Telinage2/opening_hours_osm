@@ -1,4 +1,4 @@
-from typing import Generator, Optional, TypeVar, Callable
+from typing import Generator, Optional
 import importlib.resources
 import enum
 
@@ -6,6 +6,7 @@ import lark
 
 from opening_hours_osm import model
 from opening_hours_osm.model.util import Sign, Bitfield
+from opening_hours_osm.util import map_opt
 
 
 def get_parser():
@@ -85,7 +86,7 @@ class Tokens(enum.StrEnum):
     YEAR = enum.auto()
 
 
-def parse_opening_hours(opening_hours: str):
+def parse_opening_hours_tree(opening_hours: str):
     tree = PARSER.parse(opening_hours)
     return tree
 
@@ -781,13 +782,3 @@ class SubtreeProcessor:
 
     def __repr__(self) -> str:
         return f"{self.tree.data} {self.tree.children}"
-
-
-_T = TypeVar("_T")
-_To = TypeVar("_To")
-
-
-def map_opt(val: Optional[_T], mapper: Callable[[_T], _To]) -> Optional[_To]:
-    if val is None:
-        return None
-    return mapper(val)
