@@ -1,4 +1,4 @@
-from typing import Sequence
+from typing import Sequence, Self
 import enum
 import datetime
 from dataclasses import dataclass
@@ -64,6 +64,13 @@ class Bitfield:
         self.v = 0
         self.len = len
 
+    @classmethod
+    def from_list(cls, ls: list[bool]) -> Self:
+        bf = cls(len(ls))
+        for i, x in enumerate(ls):
+            bf.set(i, x)
+        return bf
+
     def _check_i(self, i: int):
         if i < 0 or i >= self.len:
             raise ValueError(f"index out of range; len={self.len}")
@@ -99,3 +106,13 @@ class Bitfield:
 
     def __eq__(self, value: object, /) -> bool:
         return isinstance(value, Bitfield) and self.v == value.v
+
+    def __repr__(self) -> str:
+        res = "Bitfield("
+        for i in range(self.len):
+            if self.get(i):
+                res += "1"
+            else:
+                res += "0"
+        res += ")"
+        return res

@@ -149,7 +149,9 @@ class VariableTime(ModelBase, TimeFilter[ExtendedTime]):
 
     def as_naive(self, date: datetime.date, ctx: Context) -> ExtendedTime:
         t = ctx.locale.event_time(date, self.event)
-        return ExtendedTime(t.hour, t.minute).add_minutes_opt(self.offset) or MIDNIGHT_00
+        return (
+            ExtendedTime(t.hour, t.minute).add_minutes_opt(self.offset) or MIDNIGHT_00
+        )
 
     def __str__(self) -> str:
         res = str(self.event)
@@ -169,6 +171,11 @@ class TimeSpan(ModelBase, TimeFilter[tuple[ExtendedTime, ExtendedTime]]):
     end: TimeUnion
     open_end: bool = False
     repeats: Optional[Duration] = None
+    """
+    This notation describes a repeated event:
+
+    10:00-16:00/90 and 10:00-16:00/01:30 are evaluated as "from ten am to four pm every 1½ hours". Especially departure times can be written very concise and compact using this notation. The interval time following the "/" is valid but ignored for opening_hours.
+    """
 
     def is_immutable_full_day(self) -> bool:
         return (
@@ -185,7 +192,7 @@ class TimeSpan(ModelBase, TimeFilter[tuple[ExtendedTime, ExtendedTime]]):
         end = self.end.as_naive(date, ctx)
 
         # If end < start, it actually wraps to next day
-        if start > end:
+        if start >= end:
             end = end.add_hours_opt(24)
             assert end, "overflow during TimeSpan resolution"
 
@@ -215,7 +222,7 @@ class TimeSelector(ModelBase, TimeFilter[NaiveTimeSelectorIterator]):
     )
 
     def __init__(self, time: Optional[list[TimeSpan]] = None) -> None:
-        if time is None:
+        if not time:
             self.time = [TimeSpan(MIDNIGHT_00, MIDNIGHT_24)]
         else:
             self.time = time

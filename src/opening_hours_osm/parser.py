@@ -33,6 +33,7 @@ class Rules(enum.StrEnum):
     monthday_selector = enum.auto()
     week_selector = enum.auto()
     weekday_selector = enum.auto()
+    separator_for_readability = enum.auto()
     time_selector = enum.auto()
     timespan = enum.auto()
     time = enum.auto()
@@ -113,17 +114,27 @@ def build_rule_sequence(
 ) -> model.RuleSequence:
     st = SubtreeProcessor(tree, Rules.rule_sequence)
 
-    selector_sequence_tree = st.get_subtree(Rules.selector_sequence)
+    selector_sequence_tree = st.get_subtree_opt(Rules.selector_sequence)
     rule_modifier_tree = st.get_subtree_opt(Rules.rule_modifier)
+
+    if not selector_sequence_tree and not rule_modifier_tree:
+        raise Exception("empty rule sequence")
 
     if rule_modifier_tree:
         kind, comment = build_rule_modifier(rule_modifier_tree)
     else:
         kind, comment = model.RuleKind.OPEN, None
 
-    day_selector, time_selector, extra_comment = build_selector_sequence(
-        selector_sequence_tree
-    )
+    if selector_sequence_tree:
+        day_selector, time_selector, extra_comment = build_selector_sequence(
+            selector_sequence_tree
+        )
+    else:
+        day_selector, time_selector, extra_comment = (
+            model.DaySelector(),
+            model.TimeSelector(),
+            None,
+        )
 
     comments = []
     if comment:
@@ -211,6 +222,8 @@ def build_wide_range_selectors(
                     monthday_selector = build_monthday_selector(child)
                 case Rules.week_selector:
                     week_selector = build_week_selector(child)
+                case Rules.separator_for_readability:
+                    pass
                 case _:
                     raise unexpected_token(child.data, Rules.wide_range_selectors)
         elif isinstance(child, lark.Token) and child.type == Tokens.COMMENT:
@@ -305,7 +318,7 @@ def build_extended_time(tree: lark.Tree) -> model.time.TimeUnion:
 
 
 def build_variable_time(tree: lark.Tree) -> model.time.VariableTime:
-    st = SubtreeProcessor(tree, Rules.extended_time)
+    st = SubtreeProcessor(tree, Rules.variable_time)
     event = build_event(st.get_subtree(Rules.event))
     offset = 0
     st_plusminus = st.get_subtree_opt(Rules.plus_or_minus)
@@ -464,34 +477,29 @@ def build_monthday_range(tree: lark.Tree) -> model.day.MonthdayRange:
     if st_monthday_range_from:
         st = SubtreeProcessor(st_monthday_range_from, Rules.monthday_range_from)
         start_date = build_date_from(st.get_subtree(Rules.date_from, 1))
-        start_offset = map_opt(
-            st.get_subtree_opt(Rules.date_offset, 1), build_date_offset
+        start_offset = (
+            map_opt(st.get_subtree_opt(Rules.date_offset, 1), build_date_offset)
+            or model.day.DateOffset()
         )
 
-        end_date = start_date
-        end_offset = start_offset or model.day.DateOffset()
-
-        if start_offset:
-            if st.get_token_opt(Tokens.PLUS, 1):
-                if start_date.year is not None:
-                    end_date = model.day.CalendarDate(9999, model.day.Month.Dez, 31)
-                else:
-                    end_date = model.day.CalendarDate(None, model.day.Month.Dez, 31)
-            end_date = (
-                map_opt(
-                    st.get_subtree_opt(Rules.date_to),
-                    lambda x: build_date_to(x, start_date),
-                )
-                or end_date
-            )
-            end_offset = (
-                map_opt(st.get_subtree_opt(Rules.date_offset), build_date_offset)
-                or end_offset
+        if st.get_token_opt(Tokens.PLUS, 1):
+            if start_date.year is not None:
+                end_date = model.day.CalendarDate(9999, model.day.Month.Dec, 31)
+            else:
+                end_date = model.day.CalendarDate(None, model.day.Month.Dec, 31)
+        elif st_end_date := st.get_subtree_opt(Rules.date_to, 1):
+            end_date = build_date_to(st_end_date, start_date)
+        else:
+            return model.day.DateRange(
+                start_date, start_offset, start_date, start_offset
             )
 
-        return model.day.DateRange(
-            start_date, start_offset or model.day.DateOffset(), end_date, end_offset
+        end_offset = (
+            map_opt(st.get_subtree_opt(Rules.date_offset), build_date_offset)
+            or model.day.DateOffset()
         )
+
+        return model.day.DateRange(start_date, start_offset, end_date, end_offset)
     else:
         year = map_opt(st.get_token_opt(Tokens.YEAR, 1), int)
         month_start = model.day.Month[st.get_token(Tokens.MONTH, 1)]
@@ -526,7 +534,7 @@ def build_date_from(tree: lark.Tree) -> model.day.DateUnion:
     return __build_date_from(st)
 
 
-def __build_date_from(st: "SubtreeProcessor"):
+def __build_date_from(st: "SubtreeProcessor") -> model.day.DateUnion:
     year = map_opt(st.get_token_opt(Tokens.YEAR, 1), int)
 
     st_variable_date = st.get_subtree_opt(Rules.variable_date)
@@ -539,18 +547,19 @@ def __build_date_from(st: "SubtreeProcessor"):
         case Tokens.DAYNUM:
             day = int(tk_day.value)
             return model.day.CalendarDate(year, month, day)
-        case Tokens.WDAY:
-            wday = model.day.Weekday[tk_day.value]
-            nth = None
-            tk_nth = st.next_token_opt(1)
-            if tk_nth:
-                minus = tk_nth.type == Tokens.MINUS
-                if minus:
-                    tk_nth = st.next_token(1)
-                nth = int(tk_nth.value)
-            raise NotImplementedError(
-                f"date_from based on weekday not implemented; wday={wday} nth={nth}"
-            )
+        # TODO: unexpected
+        # case Tokens.WDAY:
+        #     wday = model.day.Weekday[tk_day.value]
+        #     nth = None
+        #     tk_nth = st.next_token_opt(1)
+        #     if tk_nth:
+        #         minus = tk_nth.type == Tokens.MINUS
+        #         if minus:
+        #             tk_nth = st.next_token(1)
+        #         nth = int(tk_nth.value)
+        #     raise NotImplementedError(
+        #         f"date_from based on weekday not implemented; wday={wday} nth={nth}"
+        #     )
         case _:
             raise st.unexpected_token(tk_day.type)
 
@@ -567,18 +576,17 @@ def build_date_to(
                 f"Variable date ({date_from.kind}) followed by a day number"
             )
 
-        day = date_from.day
         month = date_from.month
         year = date_from.year
 
-        if day > daynum:
+        if date_from.day > daynum:
             month = month.next()
             if month == model.day.Month.Jan and year is not None:
                 year += 1
-        return model.day.CalendarDate(year, month, day)
+        return model.day.CalendarDate(year, month, daynum)
 
     else:
-        return __build_date_from(st)
+        return __build_date_from(SubtreeProcessor(st.get_subtree(Rules.date_from)))
 
 
 def build_variable_date(tree: lark.Tree, year: Optional[int]) -> model.day.VariableDate:
@@ -627,7 +635,7 @@ def build_year_range(tree: lark.Tree) -> model.day.YearRange:
 def build_plus_or_minus(tree: lark.Tree) -> Sign:
     st = SubtreeProcessor(tree)
     token = st.next_token()
-    return Sign(token.type)
+    return Sign[token.type]
 
 
 def build_hour_minutes(tree: lark.Tree) -> model.time.ExtendedTime:

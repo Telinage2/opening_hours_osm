@@ -207,6 +207,12 @@ class YearRange(ModelBase, DateFilter):
     end: Optional[int]
     step: int = 1
 
+    def __post_init__(self):
+        if self.end and self.end < self.start:
+            raise Exception("Year range with start year > end year is invalid")
+        if self.step < 1:
+            raise Exception("You can not use year ranges with period equals zero.")
+
     def filter(self, date: datetime.date, ctx: Context) -> bool:
         return (
             wrapping_contains(self.start, self.end or DATE_END.year, date.year)
@@ -265,7 +271,7 @@ class Month(enum.IntEnum):
     Sep = 9
     Oct = 10
     Nov = 11
-    Dez = 12
+    Dec = 12
 
     def next(self) -> "Month":
         nv = self + 1
@@ -307,7 +313,7 @@ class MonthRange(ModelBase, DateFilter):
             start = create_date_opt(self.year, self.start, 1)
             if start is None:
                 return None
-            if self.start <= self.end and self.end < Month.Dez:
+            if self.start <= self.end and self.end < Month.Dec:
                 end = create_date_opt(self.year, self.end + 1, 1)
             else:
                 end = create_date_opt(self.year + 1, self.end % 12 + 1, 1)
@@ -378,6 +384,14 @@ class CalendarDate(ModelBase):
     month: Month
     day: int
 
+    def __post_init__(self):
+        if self.year:
+            datetime.date(self.year, self.month, self.day)
+        else:
+            dom = calendar.monthrange(2024, self.month)[1]
+            if self.day > dom:
+                raise Exception(f"{self.month} has only {dom} days")
+
     def to_date(self, for_year: Optional[int]) -> datetime.date:
         if self.year is None:
             if for_year is None:
@@ -392,6 +406,11 @@ class CalendarDate(ModelBase):
             res += f"{self.year} "
         res += f"{self.month} {self.day}"
         return res
+
+    def __lt__(self, value: object) -> bool:
+        if not isinstance(value, CalendarDate):
+            raise TypeError("can only compare to CalendarDate")
+        return self.to_date(DATE_START.year) < value.to_date(DATE_START.year)
 
 
 class VariableDateKind(enum.Enum):
@@ -453,7 +472,7 @@ class DateRange(ModelBase, DateFilter):
     end_offset: DateOffset
 
     def filter(self, date: datetime.date, ctx: Context) -> bool:
-        if self.start_date == __FEB_29 and self.end_date == __FEB_29:
+        if self.start_date == FEB_29 and self.end_date == FEB_29:
             ydates = (
                 create_date_opt(y, 2, 29)
                 for y in range(date.year - 1, DATE_END.year + 1)
@@ -496,7 +515,7 @@ class DateRange(ModelBase, DateFilter):
 
             return next_change_from_bounds(date, [start], [end])
         else:
-            if self.start_date == __FEB_29 and self.end_date == __FEB_29:
+            if self.start_date == FEB_29 and self.end_date == FEB_29:
                 ydates = (
                     create_date_opt(y, 2, 29)
                     for y in range(date.year - 1, DATE_END.year + 1)
@@ -539,6 +558,16 @@ class WeekRange(ModelBase, DateFilter):
     start: int
     end: int
     step: int = 1
+
+    def __post_init__(self):
+        if self.start > self.end:
+            raise Exception(
+                "You have specified a week range in reverse order or leaping over a year. This is (currently) not supported."
+            )
+        if self.step > 26:
+            raise Exception(
+                "You have specified a week period which is greater than 26. 26.5 is the half of the maximum 53 week dates per year so a week date period greater than 26 would only apply once per year."
+            )
 
     def filter(self, date: datetime.date, ctx: Context) -> bool:
         week = date.isocalendar().week
@@ -721,4 +750,4 @@ class DaySelector(ModelBase, DateFilter):
 
 type DateInterval = tuple[datetime.date, datetime.date]
 
-__FEB_29 = CalendarDate(None, Month.Feb, 29)
+FEB_29 = CalendarDate(None, Month.Feb, 29)
