@@ -1,7 +1,7 @@
 // Source: https://wiki.openstreetmap.org/wiki/Key:opening_hours/specification
 // Specification version 0.7.4
 
-%ignore " "
+// %ignore " "
 ?start: time_domain
 
 // Constants
@@ -41,39 +41,47 @@ plus_or_minus : PLUS | MINUS
 
 // Definition
 time_domain : rule_sequence (any_rule_separator rule_sequence)*
-rule_sequence : selector_sequence rule_modifier? | rule_modifier
+rule_sequence : selector_sequence SPACE? rule_modifier?
 
 // Rule separators
 // Rules are evaluated from left to right. If a normal rule that specifies open hours applies to a given day, then these hours are the only hours that are open that day.
 // If an additional rule applies to a given day, then these hours are open that day, in addition to all the hours specified by earlier rules.
 any_rule_separator : normal_rule_separator | additional_rule_separator | fallback_rule_separator
-normal_rule_separator : ";" SPACE
+normal_rule_separator : SPACE? ";" SPACE?
 additional_rule_separator : "," SPACE
 // The rule which follows this separator (token) will match every time frame not covered by previous rules.
-fallback_rule_separator : SPACE "||" SPACE
+fallback_rule_separator : SPACE? "||" SPACE
 
 // Rule modifiers
-rule_modifier : rule_kind COMMENT? | COMMENT
+rule_modifier : rule_kind (SPACE? COMMENT)? | COMMENT
 rule_kind : OPEN | CLOSED | UNKNOWN
 
 // Selectors
-selector_sequence : ALWAYS_OPEN | wide_range_selectors small_range_selectors
-wide_range_selectors : year_selector? monthday_selector? week_selector? separator_for_readability? | COMMENT separator_for_readability
-small_range_selectors : weekday_selector? time_selector?
-separator_for_readability : ":"
+selector_sequence : ALWAYS_OPEN | wide_range_selectors small_range_selectors?
+// The specified grammar is ambiguous: `year_selector` can contain a single year which could also be the optional prefix of
+// `monthday_selector`. In such a case `monthday_selector` will be favored.
+wide_range_selectors : COMMENT ":" | monthday_selector week_selector? separator_for_readability? | year_selector? monthday_selector? week_selector? separator_for_readability?
+small_range_selectors : weekday_selector SPACE time_selector | weekday_selector | time_selector
+separator_for_readability : ":" SPACE? | SPACE
 
 // Time selector
 time_selector : timespan ("," timespan)*
-timespan : time ("-" extended_time)? (PLUS | repeated_time)?
-// 10:00-16:00/90 and 10:00-16:00/01:30 are evaluated as "from ten am to four pm every 1.5 hours"
-repeated_time : "/" (POSITIVE_NUMBER | hour_minutes)
+// timespan : time ("-" extended_time)? (PLUS | repeated_time)?
+timespan : time SPACE? "-" extended_time SPACE? "/" SPACE? hour_minutes
+    | time SPACE? "-" extended_time SPACE? "/" SPACE? MINUTE
+    | time SPACE? "-" SPACE? extended_time PLUS?
+    | time PLUS
+
 time : hour_minutes | variable_time
 extended_time : extended_hour_minutes | variable_time
 variable_time : "(" event plus_or_minus hour_minutes ")" | event
 event : DAWN | SUNRISE | SUNSET | DUSK
 
 // Weekday selector
-weekday_selector : weekday_sequence | holiday_sequence | holiday_sequence "," weekday_sequence | weekday_sequence "," holiday_sequence | holiday_sequence SPACE weekday_sequence
+// weekday_selector : weekday_sequence | holiday_sequence | holiday_sequence "," weekday_sequence | weekday_sequence "," holiday_sequence | holiday_sequence SPACE weekday_sequence
+weekday_selector : holiday_sequence ( ( "," | SPACE ) weekday_sequence )?
+    | weekday_sequence ( ( "," | SPACE ) holiday_sequence )?
+
 weekday_sequence : weekday_range ("," weekday_range)*
 weekday_range : WDAY ( ("-" WDAY)? | "[" nth_entry ("," nth_entry)* "]" day_offset? )
 holiday_sequence : holiday ("," holiday)*
@@ -82,19 +90,20 @@ nth_entry : NTH | NTH "-" NTH | MINUS NTH
 day_offset : SPACE plus_or_minus POSITIVE_NUMBER SPACE DAYS
 
 // Week selector
-week_selector : WEEK week ("," week)*
+week_selector : separator_for_readability? WEEK SPACE? week ("," week)*
 week : WEEKNUM ( "-" WEEKNUM week_step? )?
 // This notation is borrowed from cron and enables to express "in even weeks" or "on odd days".
 week_step : "/" POSITIVE_NUMBER
 
 // Month selector
 monthday_selector : monthday_range ("," monthday_range)*
-monthday_range : YEAR? MONTH ("-" MONTH)? | monthday_range_from
-monthday_range_from : date_from ( date_offset (PLUS | ("-" date_to day_offset?))? )?
+monthday_range : monthday_range_from | YEAR? MONTH ("-" MONTH)?
+monthday_range_from : date_from ( date_offset (SPACE? (PLUS | ("-" date_to day_offset?)))? )?
 // Given any calendar day, the notation +Su selects the first Sunday after this calendar day, the notation -Su selects the last Sunday before this calendar day.
-date_offset : (plus_or_minus WDAY)? day_offset?
+date_offset : plus_or_minus WDAY day_offset? | day_offset
 // date_from : YEAR? ( ( MONTH (DAYNUM | ( WDAY (MINUS? NTH)? )) ) | variable_date )
-date_from : YEAR? ( MONTH  DAYNUM | variable_date )
+// date_from : YEAR? ( MONTH  DAYNUM | variable_date )
+date_from : (YEAR SPACE?)? MONTH SPACE? DAYNUM | YEAR? SPACE? variable_date
 date_to : date_from | DAYNUM
 variable_date : EASTER
 

@@ -188,8 +188,10 @@ def build_selector_sequence(
 
     wrs = st.get_subtree(Rules.wide_range_selectors)
     year, monthday, week, comment = build_wide_range_selectors(wrs)
-    srs = st.get_subtree(Rules.small_range_selectors)
-    weekday, time = build_small_range_selectors(srs)
+    if srs := st.get_subtree_opt(Rules.small_range_selectors):
+        weekday, time = build_small_range_selectors(srs)
+    else:
+        weekday, time = [], []
 
     return (
         model.DaySelector(year, monthday, week, weekday),

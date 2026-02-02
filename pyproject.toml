@@ -11,6 +11,7 @@ dependencies = [
     "astral>=3.2",
     "holidays>=0.89",
     "lark-parser>=0.12.0",
+    "parsimonious>=0.11.0",
     "tzfpy>=1.1.1",
 ]
 
