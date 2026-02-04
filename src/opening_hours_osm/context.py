@@ -63,13 +63,13 @@ class GeoLocale(AbstractLocale):
     def event_time(self, date: datetime.date, event: TimeEvent) -> datetime.time:
         match event:
             case TimeEvent.DAWN:
-                return sun.dawn(self.observer, date).timetz()
+                return sun.dawn(self.observer, date, tzinfo=self.timezone).timetz()
             case TimeEvent.SUNRISE:
-                return sun.sunrise(self.observer, date).timetz()
+                return sun.sunrise(self.observer, date, tzinfo=self.timezone).timetz()
             case TimeEvent.SUNSET:
-                return sun.sunset(self.observer, date).timetz()
+                return sun.sunset(self.observer, date, tzinfo=self.timezone).timetz()
             case TimeEvent.DUSK:
-                return sun.dusk(self.observer, date).timetz()
+                return sun.dusk(self.observer, date, tzinfo=self.timezone).timetz()
             case _:
                 raise ValueError(f"unknown TimeEvent {event}")
 

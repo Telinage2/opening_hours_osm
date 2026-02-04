@@ -68,8 +68,10 @@ class Bitfield:
     @classmethod
     def from_list(cls, ls: list[bool]) -> Self:
         bf = cls(len(ls))
-        for i, x in enumerate(ls):
-            bf.set(i, x)
+        for x in reversed(ls):
+            bf.v <<= 1
+            if x:
+                bf.v |= 1
         return bf
 
     def _check_i(self, i: int):
@@ -81,16 +83,11 @@ class Bitfield:
         if val:
             self.v |= 1 << i
         else:
-            self.v ^= 1 << i
+            mask = (2**self.len - 1) ^ 1 << i
+            self.v &= mask
 
     def get(self, i: int) -> bool:
         return bool(self.v & (1 << i))
-
-    def contains(self, val: bool) -> bool:
-        if val:
-            return bool(self.v)
-        else:
-            return self.v != (1 << self.len) - 1
 
     def set_positions(self) -> list[int]:
         res = []
@@ -104,6 +101,15 @@ class Bitfield:
             self.v = (1 << self.len) - 1
         else:
             self.v = 0
+
+    def __contains__(self, val: bool) -> bool:
+        if val:
+            return bool(self.v)
+        else:
+            return self.v != (1 << self.len) - 1
+
+    def __bool__(self) -> bool:
+        return bool(self.v)
 
     def __eq__(self, value: object, /) -> bool:
         return isinstance(value, Bitfield) and self.v == value.v

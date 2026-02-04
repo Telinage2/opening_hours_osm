@@ -132,14 +132,15 @@ def build_rule_sequence(
         kind, comment = model.RuleKind.OPEN, None
 
     if selector_sequence_tree:
-        day_selector, time_selector, extra_comment = build_selector_sequence(
+        day_selector, time_selector, extra_comment, ss_empty = build_selector_sequence(
             selector_sequence_tree
         )
     else:
-        day_selector, time_selector, extra_comment = (
+        day_selector, time_selector, extra_comment, ss_empty = (
             model.DaySelector(),
             model.TimeSelector(),
             None,
+            True
         )
 
     comments = []
@@ -147,6 +148,9 @@ def build_rule_sequence(
         comments.append(comment)
     if extra_comment:
         comments.append(extra_comment)
+
+    if not rule_modifier_tree and ss_empty and not comments:
+        raise Exception("empty rule sequence")
 
     return model.RuleSequence(
         day_selector, time_selector, kind, operator, UniqueSortedList(comments)
@@ -203,14 +207,19 @@ def build_rule_kind(tree: lark.Tree) -> model.RuleKind:
 
 def build_selector_sequence(
     tree: lark.Tree,
-) -> tuple[model.DaySelector, model.TimeSelector, Optional[str]]:
+) -> tuple[model.DaySelector, model.TimeSelector, Optional[str], bool]:
+    """
+    Returns:
+        tuple[model.DaySelector, model.TimeSelector, Optional[str], bool]: DaySelector, TimeSelector, comment, is_empty
+    """
     st = SubtreeProcessor(tree, Rules.selector_sequence)
     if st.get_token_opt(Tokens.ALWAYS_OPEN, 1):
-        return model.DaySelector(), model.TimeSelector(), None
+        return model.DaySelector(), model.TimeSelector(), None, False
 
     wrs = st.get_subtree(Rules.wide_range_selectors)
     year, monthday, week, comment = build_wide_range_selectors(wrs)
-    if srs := st.get_subtree_opt(Rules.small_range_selectors):
+    srs = st.get_subtree_opt(Rules.small_range_selectors)
+    if srs:
         weekday, time = build_small_range_selectors(srs)
     else:
         weekday, time = [], []
@@ -219,6 +228,7 @@ def build_selector_sequence(
         model.DaySelector(year, monthday, week, weekday),
         model.TimeSelector(time),
         comment,
+        not year and not monthday and not week and not comment and not srs
     )
 
 
@@ -414,10 +424,10 @@ def build_weekday_range(tree: lark.Tree) -> model.day.WeekDayRange:
             nth_array = nth_from_start
         else:
             nth_array = nth_from_end
-        for i in range(start, end):
+        for i in range(start, end + 1):
             nth_array.set(i - 1, True)
 
-    if not nth_from_start.contains(True) and not nth_from_end.contains(True):
+    if not nth_from_start and not nth_from_end:
         nth_from_start.set_all(True)
         nth_from_end.set_all(True)
 

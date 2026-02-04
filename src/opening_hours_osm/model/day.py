@@ -664,7 +664,7 @@ class WeekDayRange(ModelBase, DateFilter):
         if self.start != self.end:
             res += f"-{self.end}"
 
-        if self.nth_from_start.contains(False) or self.nth_from_end.contains(False):
+        if False in self.nth_from_start or False in self.nth_from_end:
             weeknums = [str(p + 1) for p in self.nth_from_start.set_positions()] + [
                 str(-p - 1) for p in self.nth_from_end.set_positions()
             ]

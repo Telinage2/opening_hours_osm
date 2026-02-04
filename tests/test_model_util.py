@@ -2,14 +2,14 @@ from opening_hours_osm.model.util import Bitfield
 
 def test_bitfield():
     bf = Bitfield()
-    assert not bf.contains(True)
-    assert bf.contains(False)
+    assert not bf
+    assert False in bf
 
     bf.set(0, True)
     assert bf.get(0)
     assert bf.v == 0b1
-    assert bf.contains(True)
-    assert bf.contains(False)
+    assert bf
+    assert False in bf
 
     bf.set(1, True)
     assert bf.get(1)

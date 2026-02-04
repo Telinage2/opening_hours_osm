@@ -171,6 +171,7 @@ def map_rules(rules: list[dict]) -> list[RuleSequence]:
 
 def map_dt(dt: str) -> datetime.datetime:
     parsed = datetime.datetime.fromisoformat(dt)
+
     return parsed.astimezone(TZ)
 
 
@@ -188,6 +189,7 @@ def map_ranges(ranges: list[dict]) -> list[DateTimeRange]:
 
 def test_parser(data: dict):
     value = data["s"]
+    astro = "sunrise" in value or "sunset" in value
     expected_ranges = map_ranges(data["ranges"])
     expected_rules = map_rules(data["rules"])
 
@@ -200,4 +202,17 @@ def test_parser(data: dict):
             datetime.datetime(2021, 4, 18, tzinfo=TZ),
         )
     )
-    assert ranges == expected_ranges
+
+    if astro:
+        # The astro library for Rust produceed slightly different results
+        assert len(ranges) == len(expected_ranges)
+        threshold = datetime.timedelta(minutes=2)
+        for r, expected in zip(ranges, expected_ranges):
+            d_start = abs(r.start - expected.start)
+            assert d_start <= threshold
+            d_end = abs(r.end - expected.end)
+            assert d_end <= threshold
+            assert r.kind == expected.kind
+            assert r.comments == expected.comments
+    else:
+        assert ranges == expected_ranges
