@@ -7,8 +7,10 @@ from typing import (
     Protocol,
     Any,
     TypeAlias,
+    Self,
 )
 import datetime
+import bisect
 
 DATE_START = datetime.datetime(1900, 1, 1)
 DATE_END = datetime.datetime(9_999, 1, 1)
@@ -173,3 +175,63 @@ def range_intersection(
         return result
     else:
         return None
+
+
+class UniqueSortedList:
+    def __init__(self, content: Iterable[str] = []):
+        self.content = sorted(set(content))
+
+    def union(self, other: Self) -> Self:
+        def _union(x: list[str], y: list[str]) -> list[str]:
+            if not y:
+                return x
+            if not x:
+                return y
+
+            head_x = x[0]
+            head_y = y[0]
+            tail_x = x[-1]
+            tail_y = y[-1]
+
+            if tail_x < head_y:
+                x.extend(y)
+                return x
+            if tail_y < head_x:
+                y.extend(x)
+                return y
+
+            if tail_x > tail_y:
+                last = x.pop()
+            elif tail_x < tail_y:
+                last = y.pop()
+            else:
+                y.pop()
+                last = x.pop()
+
+            new_head = _union(x, y)
+            new_head.append(last)
+            return new_head
+
+        x = list(self.content)
+        y = list(other.content)
+        return type(self)(_union(x, y))
+
+    def __eq__(self, value: object) -> bool:
+        if isinstance(value, UniqueSortedList):
+            return self.content == value.content
+        if isinstance(value, list):
+            return self.content == value
+        return False
+
+    def __len__(self):
+        return len(self.content)
+
+    def __contains__(self, item):
+        pos = bisect.bisect_left(self.content, item)
+        return pos < len(self.content) and self.content[pos] == item
+
+    def __repr__(self) -> str:
+        return repr(self.content)
+
+    def __str__(self) -> str:
+        return str(self.content)

@@ -4,6 +4,7 @@ import datetime
 from dataclasses import dataclass
 
 from opening_hours_osm.model.enums import RuleKind
+from opening_hours_osm.util import UniqueSortedList
 
 
 class ModelBase:
@@ -21,7 +22,7 @@ class DateTimeRange:
     start: datetime.datetime
     end: datetime.datetime
     kind: RuleKind
-    comments: list[str]
+    comments: UniqueSortedList
 
 
 def fmt_offset(offset: int) -> str:

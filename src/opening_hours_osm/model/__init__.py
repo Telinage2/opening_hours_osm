@@ -6,6 +6,7 @@ from opening_hours_osm.model.day import DaySelector
 from opening_hours_osm.model.time import TimeSelector
 from opening_hours_osm.model.util import ModelBase
 from opening_hours_osm.model.enums import RuleKind, RuleOperator
+from opening_hours_osm.util import UniqueSortedList
 
 
 @dataclass
@@ -14,7 +15,7 @@ class RuleSequence(ModelBase):
     time_selector: TimeSelector
     kind: RuleKind
     operator: RuleOperator
-    comments: list[str]
+    comments: UniqueSortedList
 
     def is_constant(self) -> bool:
         return self.day_selector.is_empty() and self.time_selector.is_00_24()
@@ -45,7 +46,7 @@ class RuleSequence(ModelBase):
         if self.comments:
             if not is_empty:
                 res += " "
-            res += ", ".join(self.comments)
+            res += ", ".join(self.comments.content)
 
         return res
 

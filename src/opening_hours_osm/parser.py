@@ -6,7 +6,7 @@ import lark
 
 from opening_hours_osm import model
 from opening_hours_osm.model.util import Sign, Bitfield
-from opening_hours_osm.util import map_opt
+from opening_hours_osm.util import map_opt, UniqueSortedList
 
 
 def get_parser():
@@ -60,6 +60,11 @@ class Rules(enum.StrEnum):
     year_range = enum.auto()
     year_step = enum.auto()
     plus_or_minus = enum.auto()
+    comment = enum.auto()
+
+    @staticmethod
+    def should_skip(val: str) -> bool:
+        return val == Rules.separator_for_readability
 
 
 class Tokens(enum.StrEnum):
@@ -70,7 +75,8 @@ class Tokens(enum.StrEnum):
     OPEN = enum.auto()
     CLOSED = enum.auto()
     UNKNOWN = enum.auto()
-    COMMENT = enum.auto()
+    CPART = enum.auto()
+    CESCAPE = enum.auto()
     ALWAYS_OPEN = enum.auto()
     PLUS = enum.auto()
     MINUS = enum.auto()
@@ -142,7 +148,9 @@ def build_rule_sequence(
     if extra_comment:
         comments.append(extra_comment)
 
-    return model.RuleSequence(day_selector, time_selector, kind, operator, comments)
+    return model.RuleSequence(
+        day_selector, time_selector, kind, operator, UniqueSortedList(comments)
+    )
 
 
 def build_any_rule_separator(tree: lark.Tree) -> model.RuleOperator:
@@ -168,9 +176,23 @@ def build_rule_modifier(tree: lark.Tree) -> tuple[model.RuleKind, Optional[str]]
     if st_rule_kind:
         rule_kind = build_rule_kind(st_rule_kind)
 
-    comment = st.get_token_opt(Tokens.COMMENT)
+    comment = map_opt(st.get_subtree_opt(Rules.comment), build_comment)
 
     return rule_kind, comment
+
+
+def build_comment(tree: lark.Tree) -> str:
+    st = SubtreeProcessor(tree, Rules.comment)
+    res = ""
+    while tk := st.next_token_opt():
+        match tk.type:
+            case Tokens.CPART:
+                res += tk.value
+            case Tokens.CESCAPE:
+                res += tk.value.removeprefix("\\")
+            case _:
+                raise unexpected_token(tk, Rules.comment)
+    return res
 
 
 def build_rule_kind(tree: lark.Tree) -> model.RuleKind:
@@ -208,28 +230,27 @@ def build_wide_range_selectors(
     list[model.day.WeekRange],
     Optional[str],
 ]:
-    assert tree.data == Rules.wide_range_selectors
+    st = SubtreeProcessor(tree, Rules.wide_range_selectors)
 
     year_selector = []
     monthday_selector = []
     week_selector = []
     comment = None
 
-    for child in tree.children:
-        if isinstance(child, lark.Tree):
-            match child.data:
-                case Rules.year_selector:
-                    year_selector = build_year_selector(child)
-                case Rules.monthday_selector:
-                    monthday_selector = build_monthday_selector(child)
-                case Rules.week_selector:
-                    week_selector = build_week_selector(child)
-                case Rules.separator_for_readability:
-                    pass
-                case _:
-                    raise unexpected_token(child.data, Rules.wide_range_selectors)
-        elif isinstance(child, lark.Token) and child.type == Tokens.COMMENT:
-            comment = child.value
+    for child in st.iter_subtree():
+        match child.data:
+            case Rules.year_selector:
+                year_selector = build_year_selector(child)
+            case Rules.monthday_selector:
+                monthday_selector = build_monthday_selector(child)
+            case Rules.week_selector:
+                week_selector = build_week_selector(child)
+            case Rules.comment:
+                comment = build_comment(child)
+            case Rules.separator_for_readability:
+                pass
+            case _:
+                raise unexpected_token(child.data, Rules.wide_range_selectors)
 
     return year_selector, monthday_selector, week_selector, comment
 
@@ -544,7 +565,7 @@ def __build_date_from(st: "SubtreeProcessor") -> model.day.DateUnion:
         return build_variable_date(st_variable_date, year)
 
     month = model.day.Month[st.get_token(Tokens.MONTH, 1)]
-    tk_day = st.next_token(1)
+    tk_day = st.next_token()
     match tk_day.type:
         case Tokens.DAYNUM:
             day = int(tk_day.value)
@@ -736,7 +757,10 @@ class SubtreeProcessor:
         while i < len(self.tree.children):
             child = self.tree.children[i]
             i += 1
-            if isinstance(child, lark.Tree) and (rule is None or child.data == rule):
+            if isinstance(child, lark.Tree) and (
+                (rule is None and not Rules.should_skip(child.data))
+                or child.data == rule
+            ):
                 self.offset = i
                 yield child
 
@@ -775,7 +799,7 @@ class SubtreeProcessor:
         while i < self.__get_max(peek):
             child = self.tree.children[i]
             i += 1
-            if isinstance(child, lark.Tree):
+            if isinstance(child, lark.Tree) and not Rules.should_skip(child.data):
                 self.offset = i
                 return child
 

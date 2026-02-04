@@ -4,9 +4,11 @@ import datetime
 from zoneinfo import ZoneInfo
 from abc import ABC, abstractmethod
 import logging
+import bisect
 
 from astral import Observer, sun
 from tzfpy import get_tz
+import holidays
 
 from opening_hours_osm.model.enums import TimeEvent, HolidayKind
 
@@ -86,16 +88,68 @@ class TzLocale(AbstractLocale):
         return naive.astimezone(self.timezone)
 
 
-@dataclass
-class Context:
-    # holidays: ContextHolidays
-    locale: AbstractLocale = field(default_factory=NoLocale)
-    approx_bound_interval_size: Optional[datetime.timedelta] = None
+class AbstractHolidays(ABC):
+    @abstractmethod
+    def is_holiday(self, d: datetime.date, kind: HolidayKind) -> bool: ...
+
+    @abstractmethod
+    def first_holiday_after(
+        self, d: datetime.date, kind: HolidayKind
+    ) -> Optional[datetime.date]: ...
+
+
+class ContextHolidays(AbstractHolidays):
+    def __init__(self, country: str, subdiv: Optional[str] = None) -> None:
+        self.hd = holidays.country_holidays(country, subdiv)
 
     def is_holiday(self, d: datetime.date, kind: HolidayKind) -> bool:
+        if self.hd is not None and kind == HolidayKind.PH:
+            res = self.hd.get(d)
+            return res is not None
         return False
 
     def first_holiday_after(
         self, d: datetime.date, kind: HolidayKind
     ) -> Optional[datetime.date]:
+        if self.hd is not None and kind == HolidayKind.PH:
+            res = self.hd.get_closest_holiday(d)
+            if res:
+                return res[0]
         return None
+
+
+class CalendarHolidays(AbstractHolidays):
+    def __init__(self) -> None:
+        self.hd_lists: dict[HolidayKind, list[datetime.date]] = {}
+        self.hd_sets: dict[HolidayKind, set[datetime.date]] = {}
+
+    def set_holidays(
+        self, dates: list[datetime.date], kind: HolidayKind = HolidayKind.PH
+    ):
+        lst = sorted(dates)
+        self.hd_lists[kind] = lst
+        self.hd_sets[kind] = set(lst)
+
+    def is_holiday(self, d: datetime.date, kind: HolidayKind) -> bool:
+        if kind not in self.hd_sets:
+            return False
+
+        return d in self.hd_sets[kind]
+
+    def first_holiday_after(
+        self, d: datetime.date, kind: HolidayKind
+    ) -> datetime.date | None:
+        if kind not in self.hd_lists:
+            return None
+
+        lst = self.hd_lists[kind]
+        pos = bisect.bisect(lst, d)
+        if pos < len(lst):
+            return lst[pos]
+
+
+@dataclass
+class Context:
+    locale: AbstractLocale = field(default_factory=NoLocale)
+    holidays: AbstractHolidays = field(default_factory=CalendarHolidays)
+    approx_bound_interval_size: Optional[datetime.timedelta] = None

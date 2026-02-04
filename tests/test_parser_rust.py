@@ -1,10 +1,17 @@
 import json
 from pathlib import Path
+import datetime
+from zoneinfo import ZoneInfo
 
 import pytest
 
 from opening_hours_osm import OpeningHours
-from opening_hours_osm.opening_hours import RuleSequence, RuleKind, RuleOperator
+from opening_hours_osm.opening_hours import (
+    RuleSequence,
+    RuleKind,
+    RuleOperator,
+    DateTimeRange,
+)
 from opening_hours_osm.model.day import (
     DaySelector,
     YearRange,
@@ -32,9 +39,21 @@ from opening_hours_osm.model.time import (
     VariableTime,
     TimeEvent,
 )
-from opening_hours_osm.context import Context, GeoLocale
+from opening_hours_osm.context import Context, GeoLocale, CalendarHolidays
 
 DIR_TESTFILES = Path.absolute(Path(__file__).parent / "testfiles")
+TZ = ZoneInfo("Europe/Berlin")
+
+
+# Import the holidays used by the Rust library for test cases to match
+HOLIDAYS = CalendarHolidays()
+with open(DIR_TESTFILES / "holidays_de.txt") as f:
+    holidays = []
+    for line in f.readlines():
+        line = line.strip()
+        if line:
+            holidays.append(datetime.date.fromisoformat(line))
+    HOLIDAYS.set_holidays(holidays)
 
 
 def pytest_generate_tests(metafunc: pytest.Metafunc):
@@ -45,7 +64,8 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
         metafunc.parametrize("data", test_data, ids=(x["s"] for x in test_data))
 
 
-ctx = Context(GeoLocale(48.36658170393406, 10.89542692530624))
+ctx = Context(GeoLocale(48.36658170393406, 10.89542692530624), HOLIDAYS)
+
 
 def map_rules(rules: list[dict]) -> list[RuleSequence]:
     def map_month(s: str) -> Month:
@@ -60,7 +80,7 @@ def map_rules(rules: list[dict]) -> list[RuleSequence]:
             return VariableDate(year=d["year"])
 
     def map_date_offset(d: dict) -> DateOffset:
-        return DateOffset(day_offset=d["day_offset"]) # wday offset not supported
+        return DateOffset(day_offset=d["day_offset"])  # wday offset not supported
 
     def map_md_range(md: dict) -> MonthdayRange:
         if "Date" in md:
@@ -148,12 +168,36 @@ def map_rules(rules: list[dict]) -> list[RuleSequence]:
         )
     return res
 
+
+def map_dt(dt: str) -> datetime.datetime:
+    parsed = datetime.datetime.fromisoformat(dt)
+    return parsed.astimezone(TZ)
+
+
+def map_ranges(ranges: list[dict]) -> list[DateTimeRange]:
+    return [
+        DateTimeRange(
+            map_dt(r["range"]["start"]),
+            map_dt(r["range"]["end"]),
+            RuleKind[r["kind"].upper()],
+            r["comments"],
+        )
+        for r in ranges
+    ]
+
+
 def test_parser(data: dict):
     value = data["s"]
-    rules = data["rules"]
-    ranges = data["ranges"]
-    expected_rules = map_rules(rules)
+    expected_ranges = map_ranges(data["ranges"])
+    expected_rules = map_rules(data["rules"])
 
     oh = OpeningHours.parse(value, ctx)
-    # assert oh.expr.rules == expected_rules
+    assert oh.expr.rules == expected_rules
 
+    ranges = list(
+        oh.iter_range(
+            datetime.datetime(2021, 4, 4, tzinfo=TZ),
+            datetime.datetime(2021, 4, 18, tzinfo=TZ),
+        )
+    )
+    assert ranges == expected_ranges

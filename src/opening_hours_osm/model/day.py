@@ -681,16 +681,16 @@ class HolidayRange(ModelBase, DateFilter):
 
     def filter(self, date: datetime.date, ctx: Context) -> bool:
         d = date - datetime.timedelta(days=self.offset)
-        return ctx.is_holiday(d, self.kind)
+        return ctx.holidays.is_holiday(d, self.kind)
 
     def next_change_hint(
         self, date: datetime.date, ctx: Context
     ) -> datetime.date | None:
         d = date - datetime.timedelta(days=self.offset)
-        if ctx.is_holiday(d, self.kind):
+        if ctx.holidays.is_holiday(d, self.kind):
             return next_day_opt(d)
         else:
-            nxt = ctx.first_holiday_after(d, self.kind)
+            nxt = ctx.holidays.first_holiday_after(d, self.kind)
             if nxt is not None:
                 return nxt + datetime.timedelta(days=self.offset)
             else:

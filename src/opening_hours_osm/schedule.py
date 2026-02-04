@@ -4,7 +4,7 @@ import datetime
 
 from opening_hours_osm.model.time import ExtendedTime, MIDNIGHT_00, MIDNIGHT_24
 from opening_hours_osm.model import RuleKind
-from opening_hours_osm.util import Peekable, map_opt
+from opening_hours_osm.util import Peekable, UniqueSortedList, map_opt
 
 
 @dataclass
@@ -12,7 +12,7 @@ class TimeRange:
     start: ExtendedTime
     end: ExtendedTime
     kind: RuleKind
-    comments: list[str] = field(default_factory=list)
+    comments: UniqueSortedList = field(default_factory=UniqueSortedList)
 
     def contains_time(self, time: datetime.time) -> bool:
         et = ExtendedTime.from_sys(time)
@@ -28,7 +28,7 @@ class Schedule:
         cls,
         ranges: Iterable[tuple[ExtendedTime, ExtendedTime]],
         kind: RuleKind,
-        comments: list[str] = [],
+        comments: UniqueSortedList = UniqueSortedList(),
     ):
         """Create a new schedule from a list of ranges of same kind and comment"""
         sched_ranges = [
@@ -40,8 +40,9 @@ class Schedule:
         while i + 1 < len(sched_ranges):
             if sched_ranges[i].end >= sched_ranges[i + 1].start:
                 sched_ranges[i].end = sched_ranges[i + 1].end
+                comments_left = sched_ranges[i].comments
                 comments_right = sched_ranges.pop(i + i).comments
-                sched_ranges[i].comments.extend(comments_right)
+                sched_ranges[i].comments = comments_left.union(comments_right)
             else:
                 i += 1
 
@@ -64,8 +65,6 @@ class Schedule:
 
     def insert(self, ins_tr: TimeRange) -> Self:
         # Build sets of intervals before and after the inserted interval
-        # before = (r for r in self.ranges if r.start < ins_tr.end)
-        # after = (r for r in self.ranges if r.end > ins_tr.start)
         before: list[TimeRange] = []
         after: list[TimeRange] = []
         for r in self.ranges:
@@ -74,13 +73,13 @@ class Schedule:
                 if r.start < range_end:
                     before.append(TimeRange(r.start, range_end, r.kind, r.comments))
                 else:
-                    ins_tr.comments.extend(r.comments)
+                    ins_tr.comments = ins_tr.comments.union(r.comments)
             if r.end > ins_tr.start:
                 range_start = max(r.start, ins_tr.end)
                 if range_start < r.end:
                     after.append(TimeRange(range_start, r.end, r.kind, r.comments))
                 else:
-                    ins_tr.comments.extend(r.comments)
+                    ins_tr.comments = ins_tr.comments.union(r.comments)
 
         # Extend the inserted interval if it has adjacent intervals with same value
         while (
@@ -88,8 +87,7 @@ class Schedule:
         ):
             tr = before.pop()
             ins_tr.start = tr.start
-            tr.comments.extend(ins_tr.comments)
-            ins_tr.comments = tr.comments
+            ins_tr.comments = tr.comments.union(ins_tr.comments)
 
         after_it = Peekable(after)
         while True:
@@ -98,8 +96,7 @@ class Schedule:
                 break
             tr = next(after_it)
             ins_tr.end = tr.end
-            tr.comments.extend(ins_tr.comments)
-            ins_tr.comments = tr.comments
+            ins_tr.comments = tr.comments.union(ins_tr.comments)
 
         ranges = before
         ranges.append(ins_tr)
@@ -153,7 +150,7 @@ class ScheduleIterator:
 
             next_range = next(self.ranges)
             yielded_range.end = next_range.end
-            yielded_range.comments.extend(next_range.comments)
+            yielded_range.comments = yielded_range.comments.union(next_range.comments)
 
         if yielded_range.kind == self.holes_state:
             yielded_range.end = MIDNIGHT_24
