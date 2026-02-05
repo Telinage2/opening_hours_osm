@@ -90,15 +90,17 @@ class TzLocale(AbstractLocale):
 
 class AbstractHolidays(ABC):
     @abstractmethod
-    def is_holiday(self, d: datetime.date, kind: HolidayKind) -> bool: ...
+    def is_holiday(self, d: datetime.date, kind: HolidayKind) -> bool:
+        """Check if the given date is a holiday"""
 
     @abstractmethod
     def first_holiday_after(
         self, d: datetime.date, kind: HolidayKind
-    ) -> Optional[datetime.date]: ...
+    ) -> Optional[datetime.date]:
+        """Return the first holiday after the given date"""
 
 
-class ContextHolidays(AbstractHolidays):
+class CountryHolidays(AbstractHolidays):
     def __init__(self, country: str, subdiv: Optional[str] = None) -> None:
         self.hd = holidays.country_holidays(country, subdiv)
 
@@ -126,6 +128,7 @@ class CalendarHolidays(AbstractHolidays):
     def set_holidays(
         self, dates: list[datetime.date], kind: HolidayKind = HolidayKind.PH
     ):
+        """Import a list of calendar holidays"""
         lst = sorted(dates)
         self.hd_lists[kind] = lst
         self.hd_sets[kind] = set(lst)

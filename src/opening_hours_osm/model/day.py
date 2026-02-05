@@ -19,6 +19,7 @@ from opening_hours_osm.util import (
     DATE_START,
     DATE_END,
     Peekable,
+    OsmParsingException,
     SupportsRichComparisonT,
     create_date_opt,
     next_day,
@@ -209,9 +210,9 @@ class YearRange(ModelBase, DateFilter):
 
     def __post_init__(self):
         if self.end and self.end < self.start:
-            raise Exception("Year range with start year > end year is invalid")
+            raise OsmParsingException("Year range with start year > end year is invalid")
         if self.step < 1:
-            raise Exception("You can not use year ranges with period equals zero.")
+            raise OsmParsingException("You can not use year ranges with period equals zero.")
 
     def filter(self, date: datetime.date, ctx: Context) -> bool:
         return (
@@ -390,7 +391,7 @@ class CalendarDate(ModelBase):
         else:
             dom = calendar.monthrange(2024, self.month)[1]
             if self.day > dom:
-                raise Exception(f"{self.month} has only {dom} days")
+                raise OsmParsingException(f"{self.month} has only {dom} days")
 
     def to_date(self, for_year: Optional[int]) -> datetime.date:
         if self.year is None:
@@ -561,11 +562,11 @@ class WeekRange(ModelBase, DateFilter):
 
     def __post_init__(self):
         if self.start > self.end:
-            raise Exception(
+            raise OsmParsingException(
                 "You have specified a week range in reverse order or leaping over a year. This is (currently) not supported."
             )
         if self.step > 26:
-            raise Exception(
+            raise OsmParsingException(
                 "You have specified a week period which is greater than 26. 26.5 is the half of the maximum 53 week dates per year so a week date period greater than 26 would only apply once per year."
             )
 

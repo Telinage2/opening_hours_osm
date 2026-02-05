@@ -19,6 +19,10 @@ DATE_END = datetime.datetime(9_999, 1, 1)
 T = TypeVar("T")
 
 
+class OsmParsingException(Exception):
+    pass
+
+
 class _PeekableSentinel:
     pass
 

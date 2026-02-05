@@ -1,6 +1,7 @@
 from opening_hours_osm.schedule import Schedule, TimeRange
 from opening_hours_osm.model.time import ExtendedTime, MIDNIGHT_00, MIDNIGHT_24
 from opening_hours_osm.model import RuleKind
+from opening_hours_osm.util import UniqueSortedList
 
 import pytest
 
@@ -22,7 +23,7 @@ def test_iter_on_complex_schedule():
                 (ExtendedTime(14, 0), ExtendedTime(16, 0)),
             ],
             RuleKind.OPEN,
-            ["Full availability"],
+            UniqueSortedList(["Full availability"]),
         )
         .addition(
             Schedule.from_ranges(
@@ -33,7 +34,7 @@ def test_iter_on_complex_schedule():
             Schedule.from_ranges(
                 [(ExtendedTime(9, 0), ExtendedTime(10, 0))],
                 RuleKind.CLOSED,
-                ["May take orders"],
+                UniqueSortedList(["May take orders"]),
             )
         )
         .addition(
@@ -44,16 +45,25 @@ def test_iter_on_complex_schedule():
     )
 
     assert next(schedule) == TimeRange(
-        MIDNIGHT_00, ExtendedTime(10, 0), RuleKind.CLOSED, ["May take orders"]
+        MIDNIGHT_00,
+        ExtendedTime(10, 0),
+        RuleKind.CLOSED,
+        UniqueSortedList(["May take orders"]),
     )
     assert next(schedule) == TimeRange(
-        ExtendedTime(10, 0), ExtendedTime(12, 0), RuleKind.OPEN, ["Full availability"]
+        ExtendedTime(10, 0),
+        ExtendedTime(12, 0),
+        RuleKind.OPEN,
+        UniqueSortedList(["Full availability"]),
     )
     assert next(schedule) == TimeRange(
         ExtendedTime(12, 0), ExtendedTime(14, 0), RuleKind.CLOSED
     )
     assert next(schedule) == TimeRange(
-        ExtendedTime(14, 0), ExtendedTime(16, 0), RuleKind.OPEN, ["Full availability"]
+        ExtendedTime(14, 0),
+        ExtendedTime(16, 0),
+        RuleKind.OPEN,
+        UniqueSortedList(["Full availability"]),
     )
     assert next(schedule) == TimeRange(
         ExtendedTime(16, 0), ExtendedTime(18, 0), RuleKind.UNKNOWN

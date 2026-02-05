@@ -6,7 +6,7 @@ import datetime
 from opening_hours_osm.model.enums import TimeEvent
 from opening_hours_osm.model.util import ModelBase, fmt_selector
 from opening_hours_osm.context import Context
-from opening_hours_osm.util import range_intersection, ranges_union
+from opening_hours_osm.util import OsmParsingException, range_intersection, ranges_union
 
 
 @dataclass
@@ -43,9 +43,9 @@ class ExtendedTime(ModelBase, TimeFilter["ExtendedTime"]):
     @staticmethod
     def __check(hour: int, minute: int):
         if hour > 48 or hour < 0:
-            raise ValueError("hour out of range")
+            raise OsmParsingException("hour out of range")
         if minute > 59 or minute < 0 or (hour == 48 and minute > 0):
-            raise ValueError("minute out of range")
+            raise OsmParsingException("minute out of range")
 
     @staticmethod
     def __is_out_of_range(hour: int, minute: int) -> bool:

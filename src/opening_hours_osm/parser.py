@@ -6,7 +6,7 @@ import lark
 
 from opening_hours_osm import model
 from opening_hours_osm.model.util import Sign, Bitfield
-from opening_hours_osm.util import map_opt, UniqueSortedList
+from opening_hours_osm.util import map_opt, UniqueSortedList, OsmParsingException
 
 
 def get_parser():
@@ -94,8 +94,11 @@ class Tokens(enum.StrEnum):
 
 
 def parse_opening_hours_tree(opening_hours: str):
-    tree = PARSER.parse(opening_hours)
-    return tree
+    try:
+        tree = PARSER.parse(opening_hours)
+        return tree
+    except Exception as e:
+        raise OsmParsingException(e)
 
 
 def build_opening_hours(tree: lark.Tree) -> model.OpeningHoursExpression:
@@ -124,7 +127,7 @@ def build_rule_sequence(
     rule_modifier_tree = st.get_subtree_opt(Rules.rule_modifier)
 
     if not selector_sequence_tree and not rule_modifier_tree:
-        raise Exception("empty rule sequence")
+        raise OsmParsingException("empty rule sequence")
 
     if rule_modifier_tree:
         kind, comment = build_rule_modifier(rule_modifier_tree)
@@ -150,7 +153,7 @@ def build_rule_sequence(
         comments.append(extra_comment)
 
     if not rule_modifier_tree and ss_empty and not comments:
-        raise Exception("empty rule sequence")
+        raise OsmParsingException("empty rule sequence")
 
     return model.RuleSequence(
         day_selector, time_selector, kind, operator, UniqueSortedList(comments)
@@ -311,7 +314,7 @@ def build_timespan(tree: lark.Tree) -> model.time.TimeSpan:
             end_time = model.time.MIDNIGHT_24
 
     if end_time is None:
-        raise Exception(f"point in time ({start_time}) is not supported")
+        raise OsmParsingException(f"point in time ({start_time}) is not supported")
 
     st_repeated_time = st.get_subtree_opt(Rules.repeated_time)
     if st_repeated_time and st_repeated_time.children:
@@ -605,7 +608,7 @@ def build_date_to(
     if tk_day:
         daynum = int(tk_day)
         if isinstance(date_from, model.day.VariableDate):
-            raise Exception(
+            raise OsmParsingException(
                 f"Variable date ({date_from.kind}) followed by a day number"
             )
 
@@ -702,7 +705,7 @@ def subtrees(tree: lark.Tree) -> Generator[lark.Tree]:
 def get_subtree(tree: lark.Tree, n: int) -> lark.Tree:
     subtree = get_subtree_opt(tree, n)
     if subtree is None:
-        raise Exception(
+        raise OsmParsingException(
             f"could not get child {n} of {tree.data}; len={len(tree.children)}"
         )
     return subtree
@@ -715,13 +718,13 @@ def get_subtree_opt(tree: lark.Tree, n: int) -> Optional[lark.Tree]:
     if not isinstance(child, lark.Tree):
         if isinstance(child, lark.Token):
             print("token", repr(child))
-        raise Exception(f"{tree.data}: child {n} is not a tree; {type(child)}")
+        raise OsmParsingException(f"{tree.data}: child {n} is not a tree; {type(child)}")
     return child
 
 
 def only_subtree(tree: lark.Tree) -> lark.Tree:
     if len(tree.children) != 1:
-        raise Exception(f"{tree.data} has {len(tree.children)}, expected 1")
+        raise OsmParsingException(f"{tree.data} has {len(tree.children)}, expected 1")
     return get_subtree(tree, 0)
 
 
@@ -732,13 +735,13 @@ def unexpected_token(token: str | lark.Tree | lark.Token, parent: str) -> Except
         token_name = token.type
     else:
         token_name = str(token)
-    return Exception(f"Grammar error: found {token_name} inside of {parent}")
+    return OsmParsingException(f"Grammar error: found {token_name} inside of {parent}")
 
 
 class SubtreeProcessor:
     def __init__(self, tree: lark.Tree, expect: Optional[Rules] = None) -> None:
         if expect is not None and tree.data != expect:
-            raise Exception(f"Grammar error: expected {expect}; got {tree.data}")
+            raise OsmParsingException(f"Grammar error: expected {expect}; got {tree.data}")
         self.tree = tree
         self.offset = 0
 
@@ -759,7 +762,7 @@ class SubtreeProcessor:
     def get_subtree(self, rule: Rules, peek: int = 0) -> lark.Tree:
         child = self.get_subtree_opt(rule, peek)
         if child is None:
-            raise Exception(f"{self.tree.data} has no {rule}")
+            raise OsmParsingException(f"{self.tree.data} has no {rule}")
         return child
 
     def iter_subtree(self, rule: Optional[Rules] = None) -> Generator[lark.Tree]:
@@ -786,7 +789,7 @@ class SubtreeProcessor:
     def get_token(self, token: Tokens, peek: int = 0) -> str:
         child = self.get_token_opt(token, peek)
         if child is None:
-            raise Exception(f"{self.tree.data} has no {token}")
+            raise OsmParsingException(f"{self.tree.data} has no {token}")
         return child
 
     def next_token_opt(self, peek: int = 0) -> Optional[lark.Token]:
@@ -801,7 +804,7 @@ class SubtreeProcessor:
     def next_token(self, peek: int = 0) -> lark.Token:
         token = self.next_token_opt(peek)
         if token is None:
-            raise Exception(f"{self.tree.data} is empty")
+            raise OsmParsingException(f"{self.tree.data} is empty")
         return token
 
     def next_subtree_opt(self, peek: int = 0) -> Optional[lark.Tree]:
@@ -816,13 +819,13 @@ class SubtreeProcessor:
     def next_subtree(self, peek: int = 0) -> lark.Tree:
         token = self.next_subtree_opt(peek)
         if token is None:
-            raise Exception(f"{self.tree.data} is empty")
+            raise OsmParsingException(f"{self.tree.data} is empty")
         return token
 
     def unexpected_token(self, token: Optional[str]) -> Exception:
         if token is None:
-            return Exception(f"Grammar error: {self.tree.data} empty")
-        return Exception(f"Grammar error: found {token} inside of {self.tree.data}")
+            return OsmParsingException(f"Grammar error: {self.tree.data} empty")
+        return OsmParsingException(f"Grammar error: found {token} inside of {self.tree.data}")
 
     def __repr__(self) -> str:
         return f"{self.tree.data} {self.tree.children}"
