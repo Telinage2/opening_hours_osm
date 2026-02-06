@@ -1,6 +1,56 @@
+from typing import Optional
+import datetime
+
 import pytest
 
-from opening_hours_osm import OpeningHours, OsmParsingException
+from opening_hours_osm import (
+    OpeningHours,
+    OsmParsingException,
+    Context,
+    CountryHolidays,
+    RuleKind,
+)
+from opening_hours_osm.schedule import Schedule, TimeRange, ExtendedTime
+from opening_hours_osm.model.enums import HolidayKind
+
+
+@pytest.mark.parametrize(
+    "value,date,country,schedule",
+    [
+        (
+            "2020:10:00-12:00; PH off",
+            datetime.date(2020, 7, 14),
+            "FR",
+            [TimeRange(ExtendedTime(0, 0), ExtendedTime(24, 0), RuleKind.CLOSED)],
+        ),
+        (
+            "2020:10:00-12:00; PH off",
+            datetime.date(2020, 7, 14),
+            "US",
+            [TimeRange(ExtendedTime(10, 0), ExtendedTime(12, 0), RuleKind.OPEN)],
+        ),
+        # Independence Day is a federal holiday. If July 4 is a Saturday, it is
+        # observed on Friday, July 3.
+        (
+            "2020:10:00-12:00; PH off",
+            datetime.date(2020, 7, 3),
+            "US",
+            [TimeRange(ExtendedTime(0, 0), ExtendedTime(24, 0), RuleKind.CLOSED)],
+        ),
+    ],
+)
+def test_holidays(
+    value: str, date: datetime.date, country: str, schedule: list[TimeRange]
+):
+    ctx = Context(holidays=CountryHolidays(country))
+    assert ctx.holidays.is_holiday(date, HolidayKind.PH) == all(
+        s.kind == RuleKind.CLOSED for s in schedule
+    )
+
+    oh = OpeningHours.parse(value, ctx)
+    got_schedule = oh.schedule_at(date)
+    expected_schedule = Schedule(schedule)
+    assert got_schedule == expected_schedule
 
 
 @pytest.mark.parametrize(
@@ -95,12 +145,6 @@ from opening_hours_osm import OpeningHours, OsmParsingException
         '』testing"; 00:23-00:42 unknown "warning at correct position?"',
         '"testing«; 00:23-00:42 unknown "warning at correct position?"',
         ' || open; 00:23-00:42 unknown "warning at correct position?"',
-        # PH, An additional rule does not make sense here 'PH, Aug-Sep 00:00-24:00; 00:23-00:42 unknown "warning at correct position?"',
-        # We off, Mo,Tu,Th-Su,PH,  <--- (An additional rule does not make sense here. Just use a ";" as rule separator. 'We off, Mo,Tu,Th-Su,PH, Jun-Aug We 11:00-14:00,17:00+; 00:23-00:42 unknown "warning at correct position?"',
-        # 'We, Aug Mo; 00:23-00:42 unknown "warning at correct position?"',
-        # '2014, Aug Mo; 00:23-00:42 unknown "warning at correct position?"',
-        # week 05,  <--- (An additional rule does not make sense here. 'week 05, Aug Mo; 00:23-00:42 unknown "warning at correct position?"',
-        # 'Jun 02-5, week 05 00:00-24:00; 00:23-00:42 unknown "warning at correct position?"',
         'Jan 00; 00:23-00:42 unknown "warning at correct position?"',
         'Jan 32; 00:23-00:42 unknown "warning at correct position?"',
         'Feb 30; 00:23-00:42 unknown "warning at correct position?"',
@@ -120,3 +164,30 @@ from opening_hours_osm import OpeningHours, OsmParsingException
 def test_parser_fail(value: str):
     with pytest.raises(OsmParsingException):
         OpeningHours.parse(value)
+
+
+@pytest.mark.parametrize(
+    "value,start,expected_end",
+    [
+        pytest.param(
+            "Apr 1 - Nov 3 00:00-24:00",
+            datetime.datetime(2018, 6, 11),
+            datetime.datetime(2018, 11, 4),
+            id="handling_of_spaces",
+        ),
+        pytest.param(
+            "2022 Jan 1-2023 Dec 31",
+            datetime.datetime(2022, 1, 1),
+            datetime.datetime(2024, 1, 1),
+            id="no_date_range_end_in_intervals",
+        ),
+        pytest.param(
+            "Jan-Dec", datetime.datetime(2024, 1, 1), None, id="infinite_loop"
+        ),
+    ],
+)
+def test_parser_issues(
+    value: str, start: datetime.datetime, expected_end: Optional[datetime.datetime]
+):
+    oh = OpeningHours.parse(value)
+    assert oh.next_change(start) == expected_end

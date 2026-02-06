@@ -30,6 +30,7 @@ from opening_hours_osm.util import (
 
 T = TypeVar("T")
 Df = TypeVar("Df", bound="DateFilter")
+DATE_ZERO = datetime.date(1, 1, 1)
 
 
 def filter_seq(seq: Sequence[Df], date: datetime.date, ctx: Context) -> bool:
@@ -186,7 +187,21 @@ class DateFilter(ABC):
     @abstractmethod
     def next_change_hint(
         self, date: datetime.date, ctx: Context
-    ) -> Optional[datetime.date]: ...
+    ) -> Optional[datetime.date]:
+        """Return the next date when the filter will change"""
+
+
+def next_change_hint_seq(
+    seq: Sequence[DateFilter], date: datetime.date, ctx: Context
+) -> Optional[datetime.date]:
+    """Return the next date when one of the filters will change"""
+    if not seq:
+        return DATE_END.date()
+
+    m = min((x.next_change_hint(date, ctx) or DATE_ZERO for x in seq))
+    if m == DATE_ZERO:
+        return None
+    return m
 
 
 class Weekday(enum.IntEnum):
@@ -210,9 +225,13 @@ class YearRange(ModelBase, DateFilter):
 
     def __post_init__(self):
         if self.end and self.end < self.start:
-            raise OsmParsingException("Year range with start year > end year is invalid")
+            raise OsmParsingException(
+                "Year range with start year > end year is invalid"
+            )
         if self.step < 1:
-            raise OsmParsingException("You can not use year ranges with period equals zero.")
+            raise OsmParsingException(
+                "You can not use year ranges with period equals zero."
+            )
 
     def filter(self, date: datetime.date, ctx: Context) -> bool:
         return (
@@ -228,12 +247,12 @@ class YearRange(ModelBase, DateFilter):
 
         if self.end and self.end < date.year:
             # 1. time exceeded the range, the state won't ever change
-            return DATE_END
+            return DATE_END.date()
         elif date.year < self.start:
             # 2. time didn't reach the range yet
             next_year = self.start
         elif self.end is None:
-            return DATE_END
+            return DATE_END.date()
         elif self.step == 1:
             # 3. time is in the range and step is naive
             next_year = self.end + 1
@@ -695,7 +714,7 @@ class HolidayRange(ModelBase, DateFilter):
             if nxt is not None:
                 return nxt + datetime.timedelta(days=self.offset)
             else:
-                return DATE_END
+                return DATE_END.date()
 
     def __str__(self) -> str:
         res = str(self.kind)
@@ -729,7 +748,19 @@ class DaySelector(ModelBase, DateFilter):
     def next_change_hint(
         self, date: datetime.date, ctx: Context
     ) -> Optional[datetime.date]:
-        pass
+        # If there is no date filter, then all dates shall match
+        if self.is_empty():
+            return DATE_END.date()
+
+        m = min(
+            next_change_hint_seq(self.year, date, ctx) or DATE_ZERO,
+            next_change_hint_seq(self.monthday, date, ctx) or DATE_ZERO,
+            next_change_hint_seq(self.week, date, ctx) or DATE_ZERO,
+            next_change_hint_seq(self.weekday, date, ctx) or DATE_ZERO,
+        )
+        if m == DATE_ZERO:
+            return None
+        return m
 
     def __str__(self) -> str:
         res = ""

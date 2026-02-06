@@ -11,8 +11,7 @@ The library was ported from this Rust library <https://github.com/remi-dupre/ope
 ```python
 from datetime import datetime
 
-from opening_hours_osm import OpeningHours
-from opening_hours_osm.context import Context, GeoLocale, CountryHolidays
+from opening_hours_osm import OpeningHours, Context, GeoLocale, CountryHolidays
 
 ctx = Context(
     # Locale for determining timezone and astronomic events
