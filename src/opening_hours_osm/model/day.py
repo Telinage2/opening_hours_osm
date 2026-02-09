@@ -18,6 +18,7 @@ from opening_hours_osm.model.util import (
 from opening_hours_osm.util import (
     DATE_START,
     DATE_END,
+    DATE_ZERO,
     Peekable,
     OsmParsingException,
     SupportsRichComparisonT,
@@ -30,7 +31,6 @@ from opening_hours_osm.util import (
 
 T = TypeVar("T")
 Df = TypeVar("Df", bound="DateFilter")
-DATE_ZERO = datetime.date(1, 1, 1)
 
 
 def filter_seq(seq: Sequence[Df], date: datetime.date, ctx: Context) -> bool:
@@ -752,12 +752,14 @@ class DaySelector(ModelBase, DateFilter):
         if self.is_empty():
             return DATE_END.date()
 
-        m = min(
+        parts = [
             next_change_hint_seq(self.year, date, ctx) or DATE_ZERO,
             next_change_hint_seq(self.monthday, date, ctx) or DATE_ZERO,
             next_change_hint_seq(self.week, date, ctx) or DATE_ZERO,
             next_change_hint_seq(self.weekday, date, ctx) or DATE_ZERO,
-        )
+        ]
+
+        m = min(*parts)
         if m == DATE_ZERO:
             return None
         return m

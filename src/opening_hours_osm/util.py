@@ -14,7 +14,7 @@ import bisect
 
 DATE_START = datetime.datetime(1900, 1, 1)
 DATE_END = datetime.datetime(9_999, 1, 1)
-
+DATE_ZERO = datetime.date(1, 1, 1)
 
 T = TypeVar("T")
 

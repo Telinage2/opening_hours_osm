@@ -14,6 +14,7 @@ from opening_hours_osm.parser import parse_opening_hours_tree, build_opening_hou
 from opening_hours_osm.util import (
     DATE_START,
     DATE_END,
+    DATE_ZERO,
     Peekable,
     map_opt,
     next_day_opt,
@@ -174,9 +175,13 @@ class OpeningHours:
                 d = rule.day_selector.next_change_hint(date, self.ctx)
             else:
                 d = next_day_opt(date)
-            if d is not None and (first_date is None or d < first_date):
+            if d is None:
+                d = DATE_ZERO
+            if first_date is None or d < first_date:
                 first_date = d
 
+        if first_date == DATE_ZERO:
+            return None
         return first_date
 
     def schedule_at(self, date: datetime.date) -> Schedule:
