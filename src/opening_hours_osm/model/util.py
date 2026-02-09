@@ -1,7 +1,7 @@
 from typing import Sequence, Self
 import enum
 import datetime
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from opening_hours_osm.model.enums import RuleKind
 from opening_hours_osm.util import UniqueSortedList
@@ -22,7 +22,7 @@ class DateTimeRange:
     start: datetime.datetime
     end: datetime.datetime
     kind: RuleKind
-    comments: UniqueSortedList
+    comments: UniqueSortedList = field(default_factory=UniqueSortedList)
 
 
 def fmt_offset(offset: int) -> str:

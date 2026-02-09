@@ -153,8 +153,8 @@ def valid_ymd_before(year: int, month: int, day: int) -> datetime.date:
     if d is not None:
         return d
 
-    for d in reversed(range(28, day)):
-        d = create_date_opt(year, month, day)
+    for x in reversed(range(28, day)):
+        d = create_date_opt(year, month, x)
         if d is not None:
             return d
 
@@ -169,8 +169,8 @@ def valid_ymd_after(year: int, month: int, day: int) -> datetime.date:
     if d is not None:
         return d
 
-    for d in reversed(range(28, day)):
-        d = create_date_opt(year, month, day)
+    for x in reversed(range(28, day)):
+        d = create_date_opt(year, month, x)
         if d is not None:
             d = next_day_opt(d)
             if d is not None:
