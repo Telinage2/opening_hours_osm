@@ -185,23 +185,18 @@ class DateFilter(ABC):
         """Return true if the given date is included in the date range"""
 
     @abstractmethod
-    def next_change_hint(
-        self, date: datetime.date, ctx: Context
-    ) -> Optional[datetime.date]:
+    def next_change_hint(self, date: datetime.date, ctx: Context) -> datetime.date:
         """Return the next date when the filter will change"""
 
 
 def next_change_hint_seq(
     seq: Sequence[DateFilter], date: datetime.date, ctx: Context
-) -> Optional[datetime.date]:
+) -> datetime.date:
     """Return the next date when one of the filters will change"""
     if not seq:
         return DATE_END.date()
 
-    m = min((x.next_change_hint(date, ctx) or DATE_ZERO for x in seq))
-    if m == DATE_ZERO:
-        return None
-    return m
+    return min((x.next_change_hint(date, ctx) for x in seq))
 
 
 class Weekday(enum.IntEnum):
@@ -239,11 +234,9 @@ class YearRange(ModelBase, DateFilter):
             and abs(date.year - self.start) % self.step == 0
         )
 
-    def next_change_hint(
-        self, date: datetime.date, ctx: Context
-    ) -> datetime.date | None:
+    def next_change_hint(self, date: datetime.date, ctx: Context) -> datetime.date:
         if self.end and self.start > self.end:
-            return None
+            return DATE_ZERO
 
         if self.end and self.end < date.year:
             # 1. time exceeded the range, the state won't ever change
@@ -314,9 +307,7 @@ class MonthRange(ModelBase, DateFilter):
             self.start, self.end, date.month
         )
 
-    def next_change_hint(
-        self, date: datetime.date, ctx: Context
-    ) -> datetime.date | None:
+    def next_change_hint(self, date: datetime.date, ctx: Context) -> datetime.date:
         if self.year is None:
             if self.end.next() == self.start:
                 return DATE_END.date()
@@ -332,13 +323,13 @@ class MonthRange(ModelBase, DateFilter):
         else:
             start = create_date_opt(self.year, self.start, 1)
             if start is None:
-                return None
+                return DATE_ZERO
             if self.start <= self.end and self.end < Month.Dec:
                 end = create_date_opt(self.year, self.end + 1, 1)
             else:
                 end = create_date_opt(self.year + 1, self.end % 12 + 1, 1)
             if end is None:
-                return None
+                return DATE_ZERO
 
             return next_change_from_bounds(date, [start], [end])
 
@@ -520,9 +511,7 @@ class DateRange(ModelBase, DateFilter):
             (self.end_offset.apply(d) for d in ydates_end if d),
         )
 
-    def next_change_hint(
-        self, date: datetime.date, ctx: Context
-    ) -> datetime.date | None:
+    def next_change_hint(self, date: datetime.date, ctx: Context) -> datetime.date:
         if (
             isinstance(self.start_date, CalendarDate)
             and self.start_date.year is not None
@@ -597,14 +586,12 @@ class WeekRange(ModelBase, DateFilter):
             and max(week - self.start, 0) % self.step == 0
         )
 
-    def next_change_hint(
-        self, date: datetime.date, ctx: Context
-    ) -> datetime.date | None:
+    def next_change_hint(self, date: datetime.date, ctx: Context) -> datetime.date:
         isocal = date.isocalendar()
         week = isocal.week
         if self.start > self.end:
             # TODO: wrapping implemented well?
-            return None
+            return DATE_ZERO
 
         if wrapping_contains(self.start, self.end, week):
             if self.step == 1:
@@ -612,21 +599,21 @@ class WeekRange(ModelBase, DateFilter):
             elif (week - self.start) % self.step == 0:
                 weeknum = week % 54 + 1
             else:
-                return None
+                return DATE_ZERO
         else:
             weeknum = self.start
 
         try:
             res = datetime.date.fromisocalendar(isocal.year, weeknum, 1)
         except ValueError:
-            return None
+            return DATE_ZERO
         while res <= date:
             try:
                 res = datetime.date.fromisocalendar(
                     res.isocalendar().year + 1, weeknum, 1
                 )
             except ValueError:
-                return None
+                return DATE_ZERO
         return res
 
     def __str__(self) -> str:
@@ -673,10 +660,8 @@ class WeekDayRange(ModelBase, DateFilter):
             or self.nth_from_end.get(pos_from_end)
         )
 
-    def next_change_hint(
-        self, date: datetime.date, ctx: Context
-    ) -> datetime.date | None:
-        return None
+    def next_change_hint(self, date: datetime.date, ctx: Context) -> datetime.date:
+        return DATE_ZERO
 
     def __str__(self) -> str:
         res = str(self.start)
@@ -703,12 +688,10 @@ class HolidayRange(ModelBase, DateFilter):
         d = date - datetime.timedelta(days=self.offset)
         return ctx.holidays.is_holiday(d, self.kind)
 
-    def next_change_hint(
-        self, date: datetime.date, ctx: Context
-    ) -> datetime.date | None:
+    def next_change_hint(self, date: datetime.date, ctx: Context) -> datetime.date:
         d = date - datetime.timedelta(days=self.offset)
         if ctx.holidays.is_holiday(d, self.kind):
-            return next_day_opt(d)
+            return next_day_opt(d) or DATE_ZERO
         else:
             nxt = ctx.holidays.first_holiday_after(d, self.kind)
             if nxt is not None:
@@ -745,9 +728,7 @@ class DaySelector(ModelBase, DateFilter):
             and filter_seq(self.weekday, date, ctx)
         )
 
-    def next_change_hint(
-        self, date: datetime.date, ctx: Context
-    ) -> Optional[datetime.date]:
+    def next_change_hint(self, date: datetime.date, ctx: Context) -> datetime.date:
         # If there is no date filter, then all dates shall match
         if self.is_empty():
             return DATE_END.date()
@@ -760,8 +741,6 @@ class DaySelector(ModelBase, DateFilter):
         ]
 
         m = min(*parts)
-        if m == DATE_ZERO:
-            return None
         return m
 
     def __str__(self) -> str:
