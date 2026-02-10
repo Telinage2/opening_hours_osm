@@ -65,12 +65,21 @@ class ExtendedTime(ModelBase, TimeFilter["ExtendedTime"]):
         return datetime.time(self.hour, self.minute)
 
     def add_minutes(self, minutes: int) -> Self:
-        return type(self)(self.hour, self.minute + minutes)
+        t = self.add_minutes_opt(minutes)
+        if t is None:
+            raise ValueError("out of range")
+        return t
 
     def add_minutes_opt(self, minutes: int) -> Optional[Self]:
-        if self.__is_out_of_range(self.hour, self.minute + minutes):
+        total_min = self.hour * 60 + self.minute + minutes
+        if total_min < 0:
             return None
-        return type(self)(self.hour, self.minute + minutes)
+        h = total_min // 60
+        m = total_min % 60
+
+        if self.__is_out_of_range(h, m):
+            return None
+        return type(self)(h, m)
 
     def add_hours_opt(self, hours: int) -> Optional[Self]:
         if self.__is_out_of_range(self.hour + hours, self.minute):

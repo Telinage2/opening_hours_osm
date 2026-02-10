@@ -219,10 +219,10 @@ class YearRange(ModelBase, DateFilter):
     step: int = 1
 
     def __post_init__(self):
-        if self.end and self.end < self.start:
-            raise OsmParsingException(
-                "Year range with start year > end year is invalid"
-            )
+        # if self.end and self.end < self.start:
+        #     raise OsmParsingException(
+        #         "Year range with start year > end year is invalid"
+        #     )
         if self.step < 1:
             raise OsmParsingException(
                 "You can not use year ranges with period equals zero."
@@ -569,10 +569,6 @@ class WeekRange(ModelBase, DateFilter):
     step: int = 1
 
     def __post_init__(self):
-        if self.start > self.end:
-            raise OsmParsingException(
-                "You have specified a week range in reverse order or leaping over a year. This is (currently) not supported."
-            )
         if self.step > 26:
             raise OsmParsingException(
                 "You have specified a week period which is greater than 26. 26.5 is the half of the maximum 53 week dates per year so a week date period greater than 26 would only apply once per year."

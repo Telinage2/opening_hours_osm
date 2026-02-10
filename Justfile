@@ -1,2 +1,2 @@
 test:
-    uv run pytest -sx --tb=short --timeout=5
+    uv run pytest -s --tb=short --timeout=5
