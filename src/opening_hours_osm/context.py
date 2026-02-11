@@ -15,6 +15,18 @@ from opening_hours_osm.model.enums import TimeEvent, HolidayKind
 log = logging.getLogger(__name__)
 
 
+def _localize_datetime(naive: datetime.datetime, timezone: ZoneInfo):
+    for _ in range(120):
+        candidate = naive.replace(tzinfo=timezone)
+        roundtrip = candidate.astimezone(datetime.timezone.utc).astimezone(timezone)
+        if roundtrip.replace(tzinfo=None) == naive:
+            return candidate
+
+        naive += datetime.timedelta(minutes=1)
+
+    raise Exception("could not localize datetime")
+
+
 class AbstractLocale(ABC):
     @abstractmethod
     def naive(self, localized: datetime.datetime) -> datetime.datetime: ...
@@ -58,7 +70,7 @@ class GeoLocale(AbstractLocale):
         return localized.replace(tzinfo=None)
 
     def localized_datetime(self, naive: datetime.datetime) -> datetime.datetime:
-        return naive.astimezone(self.timezone)
+        return _localize_datetime(naive, self.timezone)
 
     def event_time(self, date: datetime.date, event: TimeEvent) -> datetime.time:
         match event:
@@ -85,17 +97,7 @@ class TzLocale(AbstractLocale):
         return localized.replace(tzinfo=None)
 
     def localized_datetime(self, naive: datetime.datetime) -> datetime.datetime:
-        for _ in range(120):
-            candidate = naive.replace(tzinfo=self.timezone)
-            roundtrip = candidate.astimezone(datetime.timezone.utc).astimezone(
-                self.timezone
-            )
-            if roundtrip.replace(tzinfo=None) == naive:
-                return candidate
-
-            naive += datetime.timedelta(minutes=1)
-
-        raise Exception("could not localize datetime")
+        return _localize_datetime(naive, self.timezone)
 
 
 class AbstractHolidays(ABC):

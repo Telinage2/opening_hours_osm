@@ -13,7 +13,7 @@ TZ_PARIS = ZoneInfo("Europe/Paris")
 COORDS_PARIS = (48.8535, 2.34839)
 
 
-def test_ctx_with_tz(tzshift):
+def test_ctx_with_tz():
     ctx = Context(TzLocale(TZ_PARIS))
     oh = OpeningHours.parse("10:00-18:00", ctx)
 
