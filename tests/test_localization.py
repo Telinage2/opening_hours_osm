@@ -1,13 +1,19 @@
 import datetime
 from zoneinfo import ZoneInfo
 
-from opening_hours_osm import OpeningHours, Context, TzLocale, GeoLocale, CountryHolidays
+from opening_hours_osm import (
+    OpeningHours,
+    Context,
+    TzLocale,
+    GeoLocale,
+    CountryHolidays,
+)
 
 TZ_PARIS = ZoneInfo("Europe/Paris")
 COORDS_PARIS = (48.8535, 2.34839)
 
 
-def test_ctx_with_tz():
+def test_ctx_with_tz(tzshift):
     ctx = Context(TzLocale(TZ_PARIS))
     oh = OpeningHours.parse("10:00-18:00", ctx)
 
@@ -24,7 +30,7 @@ def test_ends_at_invalid_time():
     oh = OpeningHours.parse("10:00-26:30", ctx)
 
     res = oh.next_change(datetime.datetime(2024, 3, 30, 14, 44, tzinfo=TZ_PARIS))
-    assert res == datetime.datetime(2024, 3, 31, 3, 30, tzinfo=TZ_PARIS)
+    assert res == datetime.datetime(2024, 3, 31, 3, 0, tzinfo=TZ_PARIS)
 
 
 def test_ends_at_ambiguous_time():
@@ -39,14 +45,12 @@ def test_ends_at_ambiguous_time():
     assert res == datetime.datetime(2024, 10, 28, 2, 30, tzinfo=TZ_PARIS)
 
 
-
 def test_infer_tz():
     ctx = Context(GeoLocale(*COORDS_PARIS))
     oh = OpeningHours.parse("sunrise-sunset", ctx)
 
     res = oh.next_change(datetime.datetime(2024, 12, 23, 14, 44, tzinfo=TZ_PARIS))
     assert res == datetime.datetime(2024, 12, 23, 16, 57, tzinfo=TZ_PARIS)
-
 
 
 def test_infer_all():

@@ -85,7 +85,17 @@ class TzLocale(AbstractLocale):
         return localized.replace(tzinfo=None)
 
     def localized_datetime(self, naive: datetime.datetime) -> datetime.datetime:
-        return naive.astimezone(self.timezone)
+        for _ in range(120):
+            candidate = naive.replace(tzinfo=self.timezone)
+            roundtrip = candidate.astimezone(datetime.timezone.utc).astimezone(
+                self.timezone
+            )
+            if roundtrip.replace(tzinfo=None) == naive:
+                return candidate
+
+            naive += datetime.timedelta(minutes=1)
+
+        raise Exception("could not localize datetime")
 
 
 class AbstractHolidays(ABC):
