@@ -1,6 +1,6 @@
 [project]
 name = "opening-hours-osm"
-version = "0.1.0"
+version = "0.1.1"
 description = "Python library for parsing the opening hour format used by OpenStreetMap."
 readme = "README.md"
 authors = [
